@@ -2,13 +2,13 @@
 
 > 版本: 1.0.0
 
-一个 **Meta Skill**，引导 Cursor Agent 为 K8s 集群生成定制化的运维 Skill。
+一个 **Meta Skill**，引导 AI 编程助手（Cursor、Windsurf、Claude Code、Cline 等）为 K8s 集群生成定制化的运维 Skill。
 
 ## 设计理念
 
 **用 Skill 生成 Skill** —— 零代码，纯 Skill 驱动。
 
-核心洞察：Cursor Agent 本身就是一个能执行命令、分析输出、创建文件的 LLM。我们不需要写代码 —— 只需要通过结构化的 Markdown 告诉它*怎么做*。
+核心洞察：AI 编程助手内置的 Agent 本身就是能执行命令、分析输出、创建文件的 LLM。我们不需要写代码 —— 只需要通过结构化的 Markdown 告诉它*怎么做*。
 
 ### 核心概念：Meta Skill
 
@@ -118,7 +118,7 @@ k8s-skill-generator/
 
 ### 1. 安装此 Skill
 
-将此目录复制或链接到 Cursor Skills 目录：
+让你的 Agent 能读取到入口文件即可。以 Cursor 为例：
 
 ```bash
 # 方式一：复制
@@ -128,9 +128,11 @@ cp -r k8s-skill-generator ~/.cursor/skills/
 ln -s $(pwd)/k8s-skill-generator ~/.cursor/skills/k8s-skill-generator
 ```
 
+其他 Agent 工具（Windsurf、Claude Code、Cline 等）请参照各自的 Skill/插件目录约定。
+
 ### 2. 触发生成
 
-在 Cursor 中与 Agent 对话：
+与 Agent 对话：
 
 ```
 用户：帮我为当前集群生成一个 K8s Skill

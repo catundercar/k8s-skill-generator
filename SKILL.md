@@ -1,7 +1,7 @@
 ---
 name: k8s-skill-generator
 version: 1.0.0
-description: Generate customized operations Skill for K8s clusters. Triggered when user says "generate K8s Skill", "create cluster operations docs", or "generate K8s operations guide".
+description: Generate customized operations Skill for K8s clusters. Works with any AI coding agent (Cursor, Windsurf, Claude Code, Cline, etc.). Triggered when user says "generate K8s Skill", "create cluster operations docs", or "generate K8s operations guide".
 ---
 
 # K8s Skill Generator

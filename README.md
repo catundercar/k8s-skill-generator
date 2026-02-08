@@ -2,13 +2,13 @@
 
 > Version: 1.0.0 | [中文文档](README_zh.md)
 
-A **Meta Skill** that guides Cursor Agent to generate customized operations Skills for K8s clusters.
+A **Meta Skill** that guides AI coding agents (Cursor, Windsurf, Claude Code, Cline, etc.) to generate customized operations Skills for K8s clusters.
 
 ## Design Philosophy
 
 **Use Skill to generate Skill** — No code, pure Skill-driven.
 
-The core insight: Cursor Agent is already an LLM that can execute commands, analyze output, and create files. We don't need to write code — we just need to tell it *how to do it* via structured Markdown.
+The core insight: AI coding agents are already LLMs that can execute commands, analyze output, and create files. We don't need to write code — we just need to tell them *how to do it* via structured Markdown.
 
 ### Core Concept: Meta Skill
 
@@ -118,7 +118,7 @@ k8s-skill-generator/
 
 ### 1. Install this Skill
 
-Copy or link this directory to Cursor Skills directory:
+Make the entry file accessible to your Agent. Example for Cursor:
 
 ```bash
 # Method 1: Copy
@@ -128,9 +128,11 @@ cp -r k8s-skill-generator ~/.cursor/skills/
 ln -s $(pwd)/k8s-skill-generator ~/.cursor/skills/k8s-skill-generator
 ```
 
+For other agents (Windsurf, Claude Code, Cline, etc.), follow their respective Skill/plugin directory conventions.
+
 ### 2. Trigger Generation
 
-Chat with Agent in Cursor:
+Chat with Agent:
 
 ```
 User: Help me generate a K8s Skill for the current cluster
