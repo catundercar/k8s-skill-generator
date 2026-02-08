@@ -1,0 +1,208 @@
+# Logging Operations Template
+
+Select corresponding section based on detected logging stack (Loki/EFK).
+
+---
+
+````markdown
+# Logging Operations
+
+{{#if loki}}
+## Loki Log Query
+
+### Access Method
+
+```bash
+# Port forward
+kubectl port-forward -n {{loki.namespace}} svc/{{loki.service}} 3100:{{loki.port}}
+```
+
+### LogQL Query
+
+#### Basic Queries
+
+```bash
+# Query logs for specific namespace
+curl -s "http://localhost:3100/loki/api/v1/query_range" \
+  --data-urlencode 'query={namespace="<namespace>"}' \
+  --data-urlencode 'limit=100'
+
+# Query specific pod
+curl -s "http://localhost:3100/loki/api/v1/query_range" \
+  --data-urlencode 'query={namespace="<namespace>", pod="<pod>"}' \
+  --data-urlencode 'limit=100'
+
+# Query specific container
+curl -s "http://localhost:3100/loki/api/v1/query_range" \
+  --data-urlencode 'query={namespace="<namespace>", container="<container>"}' \
+  --data-urlencode 'limit=100'
+```
+
+#### Filter Queries
+
+```bash
+# Contains keyword
+curl -s "http://localhost:3100/loki/api/v1/query_range" \
+  --data-urlencode 'query={namespace="<namespace>"} |= "error"' \
+  --data-urlencode 'limit=100'
+
+# Regex match
+curl -s "http://localhost:3100/loki/api/v1/query_range" \
+  --data-urlencode 'query={namespace="<namespace>"} |~ "error|warn"' \
+  --data-urlencode 'limit=100'
+
+# Exclude keyword
+curl -s "http://localhost:3100/loki/api/v1/query_range" \
+  --data-urlencode 'query={namespace="<namespace>"} != "health"' \
+  --data-urlencode 'limit=100'
+```
+
+#### JSON Log Parsing
+
+```bash
+# Parse JSON fields
+curl -s "http://localhost:3100/loki/api/v1/query_range" \
+  --data-urlencode 'query={namespace="<namespace>"} | json | level="error"' \
+  --data-urlencode 'limit=100'
+```
+
+### Common Query Examples
+
+| Purpose | LogQL |
+|---------|-------|
+| All error logs | `{namespace="production"} \|= "error"` |
+| Specific service logs | `{namespace="production", app="order-api"}` |
+| Recent OOM | `{namespace="production"} \|= "OOMKilled"` |
+| HTTP 5xx errors | `{namespace="production"} \|~ "HTTP/[12].[01]\" 5[0-9]{2}"` |
+
+### Query via Grafana
+
+If Grafana has Loki datasource configured, you can query in Grafana Explore:
+
+1. Open Grafana → Explore
+2. Select Loki datasource
+3. Enter LogQL query
+{{/if}}
+
+{{#if efk}}
+## Elasticsearch Log Query
+
+### Access Method
+
+```bash
+# Port forward
+kubectl port-forward -n {{elasticsearch.namespace}} svc/{{elasticsearch.service}} 9200:{{elasticsearch.port}}
+```
+
+### Basic Queries
+
+```bash
+# View indices
+curl -s "http://localhost:9200/_cat/indices?v"
+
+# Simple search
+curl -s "http://localhost:9200/<index>/_search" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": {
+      "match": {
+        "kubernetes.namespace_name": "<namespace>"
+      }
+    },
+    "size": 100,
+    "sort": [{"@timestamp": "desc"}]
+  }'
+
+# Multi-condition search
+curl -s "http://localhost:9200/<index>/_search" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": {
+      "bool": {
+        "must": [
+          {"match": {"kubernetes.namespace_name": "<namespace>"}},
+          {"match": {"log": "error"}}
+        ]
+      }
+    },
+    "size": 100
+  }'
+```
+
+### Query via Kibana
+
+```bash
+# Port forward Kibana
+kubectl port-forward -n {{kibana.namespace}} svc/{{kibana.service}} 5601:{{kibana.port}}
+# Access http://localhost:5601
+```
+{{/if}}
+
+## kubectl Log Query
+
+Regardless of logging stack, native kubectl log commands are always available:
+
+```bash
+# View pod logs
+kubectl logs <pod> -n <namespace>
+
+# Follow logs
+kubectl logs -f <pod> -n <namespace>
+
+# Last N lines
+kubectl logs --tail=100 <pod> -n <namespace>
+
+# Last N minutes
+kubectl logs --since=30m <pod> -n <namespace>
+
+# Previous container logs (after restart)
+kubectl logs --previous <pod> -n <namespace>
+
+# Multi-container pod
+kubectl logs <pod> -c <container> -n <namespace>
+
+# Select by label
+kubectl logs -l app=<app> -n <namespace>
+```
+
+## Log Troubleshooting
+
+### Pod Startup Failure
+
+```bash
+# View pod status
+kubectl describe pod <pod> -n <namespace>
+
+# View events
+kubectl get events -n <namespace> --sort-by='.lastTimestamp' | tail -20
+
+# View previous container logs
+kubectl logs --previous <pod> -n <namespace>
+```
+
+### Application Errors
+
+```bash
+# Search for error keyword
+kubectl logs <pod> -n <namespace> | grep -i error
+
+# Monitor errors in real-time
+kubectl logs -f <pod> -n <namespace> | grep -i error
+```
+````
+
+---
+
+## Variable Reference
+
+| Variable | Description |
+|----------|-------------|
+| `{{loki.namespace}}` | Loki namespace |
+| `{{loki.service}}` | Loki Service name |
+| `{{loki.port}}` | Loki port |
+| `{{elasticsearch.namespace}}` | Elasticsearch namespace |
+| `{{elasticsearch.service}}` | Elasticsearch Service name |
+| `{{elasticsearch.port}}` | Elasticsearch port |
+| `{{kibana.namespace}}` | Kibana namespace |
+| `{{kibana.service}}` | Kibana Service name |
+| `{{kibana.port}}` | Kibana port |

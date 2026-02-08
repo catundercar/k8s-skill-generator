@@ -1,0 +1,169 @@
+# K8s Skill Main File Template
+
+When generating, replace `{{variable}}` with actual values.
+
+---
+
+````markdown
+---
+name: k8s-{{context}}
+description: {{cluster_description}}. Triggered when user mentions K8s, kubectl, Pod, Deployment, {{namespace_keywords}}.
+---
+
+# {{context}} Cluster Operations
+
+{{cluster_description}}
+
+## Security Rules (Must Follow)
+
+**All create/update/delete operations require human confirmation:**
+
+```
+AI: I will perform the following operation:
+    - Operation type: [Create/Update/Delete] [Resource type]
+    - Namespace: [namespace]
+    - Summary: [brief description]
+    
+    Confirm execution? [Y/n]
+```
+
+- **Requires confirmation**: `kubectl apply/create/delete/patch`, API write operations
+- **No confirmation needed**: `kubectl get/describe/logs`, status checks
+
+## Cluster Overview
+
+| Item | Value |
+|------|-------|
+| Context | `{{context}}` |
+| K8s Version | {{version}} |
+| Nodes | {{node_count}} ({{master_count}} master + {{worker_count}} worker) |
+| CNI | {{cni}} |
+| Ingress | {{ingress_type}} |
+
+## Cluster Access
+
+```bash
+# Switch context
+kubectl config use-context {{context}}
+
+# Verify connection
+kubectl cluster-info
+kubectl get nodes
+```
+
+## Namespaces
+
+{{#each namespaces}}
+### {{name}}
+
+**Purpose**: {{purpose}}
+{{#if criticality}}
+**Criticality**: {{criticality}}
+{{/if}}
+
+{{#if services}}
+**Services**:
+| Service | Type | Description |
+|---------|------|-------------|
+{{#each services}}
+| `{{name}}` | {{type}} | {{description}} |
+{{/each}}
+{{/if}}
+
+{{/each}}
+
+{{#if monitoring}}
+## Monitoring
+
+### Components
+
+| Component | Namespace | Service | Port |
+|-----------|-----------|---------|------|
+{{#if monitoring.prometheus}}
+| Prometheus | {{monitoring.prometheus.namespace}} | {{monitoring.prometheus.service}} | {{monitoring.prometheus.port}} |
+{{/if}}
+{{#if monitoring.grafana}}
+| Grafana | {{monitoring.grafana.namespace}} | {{monitoring.grafana.service}} | {{monitoring.grafana.port}} |
+{{/if}}
+{{#if monitoring.alertmanager}}
+| AlertManager | {{monitoring.alertmanager.namespace}} | {{monitoring.alertmanager.service}} | {{monitoring.alertmanager.port}} |
+{{/if}}
+
+{{#if monitoring.grafana}}
+### Grafana Access
+
+{{#if monitoring.grafana.ingress}}
+- URL: {{monitoring.grafana.ingress}}
+{{else}}
+```bash
+# Port forward
+kubectl port-forward -n {{monitoring.grafana.namespace}} svc/{{monitoring.grafana.service}} 3000:{{monitoring.grafana.port}}
+# Access http://localhost:3000
+```
+{{/if}}
+
+- Username: `admin`
+- Password:
+  ```bash
+  {{monitoring.grafana.password_cmd}}
+  ```
+{{/if}}
+
+{{#if monitoring.prometheus}}
+### Prometheus Query
+
+```bash
+# Port forward
+kubectl port-forward -n {{monitoring.prometheus.namespace}} svc/{{monitoring.prometheus.service}} 9090:{{monitoring.prometheus.port}}
+
+# Query example
+curl -s "http://localhost:9090/api/v1/query" --data-urlencode 'query=up'
+```
+{{/if}}
+{{/if}}
+
+## Quick Command Reference
+
+```bash
+# View all pods
+kubectl get pods -A
+
+# View resources in namespace
+kubectl get all -n <namespace>
+
+# Pod logs (follow)
+kubectl logs -f <pod> -n <namespace>
+
+# Enter container
+kubectl exec -it <pod> -n <namespace> -- /bin/sh
+
+# Port forward
+kubectl port-forward svc/<service> <local>:<remote> -n <namespace>
+```
+
+> For complete operations guide, see the Operation Docs below.
+
+## Operation Docs
+
+{{#each enabled_modules}}
+- [{{title}}](operations/{{file}})
+{{/each}}
+````
+
+---
+
+## Variable Reference
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `{{context}}` | kubectl context name | `production` |
+| `{{cluster_description}}` | Cluster description (user confirmed) | `Production K8s cluster` |
+| `{{version}}` | K8s version | `v1.28.3` |
+| `{{node_count}}` | Total nodes | `5` |
+| `{{master_count}}` | Master nodes | `3` |
+| `{{worker_count}}` | Worker nodes | `2` |
+| `{{cni}}` | CNI type | `Cilium` |
+| `{{ingress_type}}` | Ingress type | `nginx` |
+| `{{namespaces}}` | Namespace list | See structure |
+| `{{monitoring}}` | Monitoring component info | See structure |
+| `{{enabled_modules}}` | Enabled modules | `[{title, file}]` |

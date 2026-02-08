@@ -1,0 +1,169 @@
+# Monitoring Operations
+
+## Prometheus Query
+
+### Access Method
+
+```bash
+# Port forward
+kubectl port-forward -n monitoring svc/prometheus-operated 9090:9090
+
+# Query (in another terminal)
+curl -s "http://localhost:9090/api/v1/query" --data-urlencode 'query=up'
+```
+
+### Common PromQL
+
+#### Cluster Health
+
+| Purpose | Query |
+|---------|-------|
+| Node status | `kube_node_status_condition{condition="Ready",status="true"}` |
+| Node count | `count(kube_node_info)` |
+| Running pods | `sum(kube_pod_status_phase{phase="Running"})` |
+| Pending pods | `sum(kube_pod_status_phase{phase="Pending"})` |
+| Container restarts | `sum by (namespace, pod) (kube_pod_container_status_restarts_total) > 5` |
+
+#### Resource Usage
+
+| Purpose | Query |
+|---------|-------|
+| Node CPU usage | `100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)` |
+| Node memory usage | `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100` |
+| Node disk usage | `(1 - node_filesystem_avail_bytes{fstype!~"tmpfs\|overlay"} / node_filesystem_size_bytes) * 100` |
+
+## Grafana Management
+
+### Access
+
+```bash
+kubectl port-forward -n monitoring svc/grafana 3000:80
+# Access http://localhost:3000
+```
+
+- Username: `admin`
+- Password:
+  ```bash
+  kubectl get secret -n monitoring grafana -o jsonpath='{.data.admin-password}' | base64 -d
+  ```
+
+### API Operations
+
+```bash
+# Set credentials
+GRAFANA_URL="http://localhost:3000"
+GRAFANA_USER="admin"
+GRAFANA_PASS=$(kubectl get secret -n monitoring grafana -o jsonpath='{.data.admin-password}' | base64 -d)
+
+# Health check
+curl -s "$GRAFANA_URL/api/health"
+
+# List dashboards
+curl -s -u "$GRAFANA_USER:$GRAFANA_PASS" "$GRAFANA_URL/api/search?type=dash-db"
+
+# List alert rules
+curl -s -u "$GRAFANA_USER:$GRAFANA_PASS" "$GRAFANA_URL/api/v1/provisioning/alert-rules"
+```
+
+### Alert Rule Management
+
+#### Query Alert Rules
+
+```bash
+curl -s -u "$GRAFANA_USER:$GRAFANA_PASS" "$GRAFANA_URL/api/v1/provisioning/alert-rules" | \
+  jq '.[] | {uid, title, folderUID}'
+```
+
+#### Create Alert Rule
+
+```bash
+curl -X POST "$GRAFANA_URL/api/v1/provisioning/alert-rules" \
+  -H "Content-Type: application/json" \
+  -u "$GRAFANA_USER:$GRAFANA_PASS" \
+  -d '{
+    "title": "Node CPU High",
+    "ruleGroup": "node-alerts",
+    "folderUID": "<folder-uid>",
+    "condition": "C",
+    "data": [
+      {
+        "refId": "A",
+        "relativeTimeRange": {"from": 300, "to": 0},
+        "datasourceUid": "<prometheus-uid>",
+        "model": {
+          "expr": "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+          "instant": true,
+          "refId": "A"
+        }
+      },
+      {
+        "refId": "B",
+        "datasourceUid": "__expr__",
+        "model": {
+          "expression": "A",
+          "reducer": "max",
+          "refId": "B",
+          "type": "reduce"
+        }
+      },
+      {
+        "refId": "C",
+        "datasourceUid": "__expr__",
+        "model": {
+          "expression": "B",
+          "refId": "C",
+          "type": "threshold",
+          "conditions": [{
+            "evaluator": {"type": "gt", "params": [80]},
+            "operator": {"type": "and"},
+            "query": {"params": ["C"]},
+            "reducer": {"type": "last"}
+          }]
+        }
+      }
+    ],
+    "for": "5m",
+    "annotations": {
+      "summary": "Node CPU usage is above 80%"
+    },
+    "labels": {"severity": "warning"}
+  }'
+```
+
+## AlertManager Management
+
+### Access
+
+```bash
+kubectl port-forward -n monitoring svc/alertmanager-operated 9093:9093
+```
+
+### View Alerts
+
+```bash
+# Current alerts
+curl -s "http://localhost:9093/api/v2/alerts" | jq '.[] | {labels, status}'
+
+# Silence list
+curl -s "http://localhost:9093/api/v2/silences" | jq '.[] | {id, matchers, startsAt, endsAt}'
+```
+
+### Create Silence
+
+```bash
+# Note: date syntax differs by OS
+# macOS: date -u -v+2H +%Y-%m-%dT%H:%M:%SZ
+# Linux: date -u -d '+2 hours' +%Y-%m-%dT%H:%M:%SZ
+
+curl -X POST "http://localhost:9093/api/v2/silences" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "matchers": [
+      {"name": "alertname", "value": "NodeCPUHigh", "isRegex": false}
+    ],
+    "startsAt": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
+    "endsAt": "'$(date -u -v+2H +%Y-%m-%dT%H:%M:%SZ)'",
+    "createdBy": "admin",
+    "comment": "Maintenance window"
+  }'
+```

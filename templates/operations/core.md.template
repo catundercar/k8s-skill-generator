@@ -1,0 +1,697 @@
+# K8s Core Resource Operations Template
+
+This is a static template, not dependent on cluster discovery data.
+
+---
+
+````markdown
+# K8s Core Resource Operations
+
+## Deployment Management
+
+### View Deployments
+
+```bash
+# List all
+kubectl get deployments -A
+
+# Specific namespace
+kubectl get deployments -n <namespace>
+
+# Detailed info
+kubectl describe deployment <name> -n <namespace>
+
+# Export YAML
+kubectl get deployment <name> -n <namespace> -o yaml
+```
+
+### Create/Update Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: <name>
+  namespace: <namespace>
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: <name>
+  template:
+    metadata:
+      labels:
+        app: <name>
+    spec:
+      containers:
+      - name: <name>
+        image: <image>:<tag>
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+```
+
+### Common Operations
+
+```bash
+# Scale
+kubectl scale deployment <name> -n <namespace> --replicas=5
+
+# Update image
+kubectl set image deployment/<name> <container>=<image>:<tag> -n <namespace>
+
+# Check rollout status
+kubectl rollout status deployment/<name> -n <namespace>
+
+# View history
+kubectl rollout history deployment/<name> -n <namespace>
+
+# Rollback to previous version
+kubectl rollout undo deployment/<name> -n <namespace>
+
+# Rollback to specific revision
+kubectl rollout undo deployment/<name> -n <namespace> --to-revision=2
+
+# Pause/Resume rollout
+kubectl rollout pause deployment/<name> -n <namespace>
+kubectl rollout resume deployment/<name> -n <namespace>
+```
+
+## StatefulSet Management
+
+### View StatefulSets
+
+```bash
+# List all
+kubectl get statefulsets -A
+
+# Specific namespace
+kubectl get statefulsets -n <namespace>
+
+# Detailed info
+kubectl describe statefulset <name> -n <namespace>
+```
+
+### Create/Update StatefulSet
+
+```yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: <name>
+  namespace: <namespace>
+spec:
+  serviceName: <name>
+  replicas: 3
+  selector:
+    matchLabels:
+      app: <name>
+  template:
+    metadata:
+      labels:
+        app: <name>
+    spec:
+      containers:
+      - name: <name>
+        image: <image>:<tag>
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+```
+
+### Common Operations
+
+```bash
+# Scale (StatefulSet scales in order)
+kubectl scale statefulset <name> -n <namespace> --replicas=5
+
+# Rolling update
+kubectl rollout status statefulset/<name> -n <namespace>
+
+# Rollback
+kubectl rollout undo statefulset/<name> -n <namespace>
+
+# Delete without deleting PVCs
+kubectl delete statefulset <name> -n <namespace> --cascade=orphan
+```
+
+## DaemonSet Management
+
+### View DaemonSets
+
+```bash
+# List all
+kubectl get daemonsets -A
+
+# Specific namespace
+kubectl get daemonsets -n <namespace>
+
+# Detailed info
+kubectl describe daemonset <name> -n <namespace>
+```
+
+### Create DaemonSet
+
+```yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: <name>
+  namespace: <namespace>
+spec:
+  selector:
+    matchLabels:
+      app: <name>
+  template:
+    metadata:
+      labels:
+        app: <name>
+    spec:
+      containers:
+      - name: <name>
+        image: <image>:<tag>
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        effect: NoSchedule
+```
+
+### Common Operations
+
+```bash
+# Check rollout status
+kubectl rollout status daemonset/<name> -n <namespace>
+
+# Update image
+kubectl set image daemonset/<name> <container>=<image>:<tag> -n <namespace>
+
+# Rollback
+kubectl rollout undo daemonset/<name> -n <namespace>
+```
+
+## CronJob / Job Management
+
+### View CronJobs & Jobs
+
+```bash
+# List CronJobs
+kubectl get cronjobs -A
+kubectl get cronjobs -n <namespace>
+
+# List Jobs
+kubectl get jobs -n <namespace>
+
+# View CronJob details
+kubectl describe cronjob <name> -n <namespace>
+```
+
+### Create CronJob
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: <name>
+  namespace: <namespace>
+spec:
+  schedule: "0 2 * * *"  # Daily at 2:00 AM
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      template:
+        spec:
+          containers:
+          - name: <name>
+            image: <image>:<tag>
+            command: ["<command>"]
+          restartPolicy: OnFailure
+```
+
+### Create One-off Job
+
+```bash
+# Create Job from CronJob (trigger manually)
+kubectl create job <job-name> --from=cronjob/<cronjob-name> -n <namespace>
+
+# Create standalone Job
+kubectl create job <name> --image=<image>:<tag> -n <namespace> -- <command>
+```
+
+### Common Operations
+
+```bash
+# Suspend CronJob
+kubectl patch cronjob <name> -n <namespace> -p '{"spec":{"suspend":true}}'
+
+# Resume CronJob
+kubectl patch cronjob <name> -n <namespace> -p '{"spec":{"suspend":false}}'
+
+# Delete completed Jobs
+kubectl delete jobs --field-selector status.successful=1 -n <namespace>
+
+# View Job logs
+kubectl logs job/<name> -n <namespace>
+```
+
+## HPA (Horizontal Pod Autoscaler)
+
+### View HPA
+
+```bash
+# List all
+kubectl get hpa -A
+
+# Specific namespace
+kubectl get hpa -n <namespace>
+
+# Detailed info (shows current/target metrics)
+kubectl describe hpa <name> -n <namespace>
+```
+
+### Create HPA
+
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: <name>
+  namespace: <namespace>
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: <deployment-name>
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+```
+
+### Common Operations
+
+```bash
+# Quick create (CPU-based)
+kubectl autoscale deployment <name> -n <namespace> --min=2 --max=10 --cpu-percent=70
+
+# Check scaling events
+kubectl describe hpa <name> -n <namespace> | grep -A 5 "Events"
+
+# Delete HPA
+kubectl delete hpa <name> -n <namespace>
+```
+
+## Service Management
+
+### View Services
+
+```bash
+kubectl get svc -A
+kubectl get svc -n <namespace>
+kubectl describe svc <name> -n <namespace>
+```
+
+### Create Service
+
+```yaml
+# ClusterIP (internal access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: <name>
+  namespace: <namespace>
+spec:
+  type: ClusterIP
+  selector:
+    app: <app-label>
+  ports:
+  - port: 80
+    targetPort: 8080
+
+---
+# NodePort (node port exposure)
+apiVersion: v1
+kind: Service
+metadata:
+  name: <name>-nodeport
+  namespace: <namespace>
+spec:
+  type: NodePort
+  selector:
+    app: <app-label>
+  ports:
+  - port: 80
+    targetPort: 8080
+    nodePort: 30080
+
+---
+# LoadBalancer (cloud provider LB)
+apiVersion: v1
+kind: Service
+metadata:
+  name: <name>-lb
+  namespace: <namespace>
+spec:
+  type: LoadBalancer
+  selector:
+    app: <app-label>
+  ports:
+  - port: 80
+    targetPort: 8080
+```
+
+### External Services (ExternalName / Endpoints)
+
+```yaml
+# Point to external domain
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-db
+  namespace: <namespace>
+spec:
+  type: ExternalName
+  externalName: db.example.com
+
+---
+# Point to external IP
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-api
+  namespace: <namespace>
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: external-api
+  namespace: <namespace>
+subsets:
+- addresses:
+  - ip: 10.0.0.100
+  ports:
+  - port: 80
+```
+
+## ConfigMap Management
+
+### View ConfigMaps
+
+```bash
+kubectl get configmaps -n <namespace>
+kubectl describe configmap <name> -n <namespace>
+kubectl get configmap <name> -n <namespace> -o yaml
+```
+
+### Create ConfigMap
+
+```bash
+# From file
+kubectl create configmap <name> --from-file=<path> -n <namespace>
+
+# From literal values
+kubectl create configmap <name> --from-literal=key1=value1 --from-literal=key2=value2 -n <namespace>
+```
+
+```yaml
+# YAML method
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: <name>
+  namespace: <namespace>
+data:
+  config.yaml: |
+    server:
+      port: 8080
+    database:
+      host: localhost
+  simple-key: "simple-value"
+```
+
+### Use in Pod
+
+```yaml
+# Environment variable
+env:
+- name: CONFIG_VALUE
+  valueFrom:
+    configMapKeyRef:
+      name: <configmap-name>
+      key: simple-key
+
+# Mount as file
+volumes:
+- name: config-volume
+  configMap:
+    name: <configmap-name>
+volumeMounts:
+- name: config-volume
+  mountPath: /etc/config
+```
+
+## Secret Management
+
+### View Secrets
+
+```bash
+kubectl get secrets -n <namespace>
+kubectl describe secret <name> -n <namespace>
+
+# Decode and view (use with caution)
+kubectl get secret <name> -n <namespace> -o jsonpath='{.data.<key>}' | base64 -d
+```
+
+### Create Secret
+
+```bash
+# From literal values
+kubectl create secret generic <name> --from-literal=username=admin --from-literal=password=secret -n <namespace>
+
+# From file
+kubectl create secret generic <name> --from-file=<path> -n <namespace>
+
+# Docker Registry credentials
+kubectl create secret docker-registry <name> \
+  --docker-server=<registry> \
+  --docker-username=<user> \
+  --docker-password=<password> \
+  -n <namespace>
+```
+
+## Ingress Management
+
+### View Ingress
+
+```bash
+kubectl get ingress -A
+kubectl describe ingress <name> -n <namespace>
+```
+
+### Create Ingress
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: <name>
+  namespace: <namespace>
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - example.com
+    secretName: tls-secret
+```
+
+## Pod Debugging
+
+### View Pods
+
+```bash
+# List pods
+kubectl get pods -n <namespace> -o wide
+
+# Detailed info
+kubectl describe pod <name> -n <namespace>
+
+# View events
+kubectl get events -n <namespace> --sort-by='.lastTimestamp'
+```
+
+### Logs
+
+```bash
+# View logs
+kubectl logs <pod> -n <namespace>
+
+# Follow logs
+kubectl logs -f <pod> -n <namespace>
+
+# Previous container logs (after crash)
+kubectl logs <pod> -n <namespace> --previous
+
+# Multi-container
+kubectl logs <pod> -c <container> -n <namespace>
+
+# Last N lines
+kubectl logs <pod> -n <namespace> --tail=100
+```
+
+### Enter Container
+
+```bash
+# Execute command
+kubectl exec <pod> -n <namespace> -- <command>
+
+# Interactive shell
+kubectl exec -it <pod> -n <namespace> -- /bin/sh
+kubectl exec -it <pod> -n <namespace> -- /bin/bash
+
+# Multi-container
+kubectl exec -it <pod> -c <container> -n <namespace> -- /bin/sh
+```
+
+### Port Forward
+
+```bash
+# Pod port forward
+kubectl port-forward <pod> <local>:<remote> -n <namespace>
+
+# Service port forward
+kubectl port-forward svc/<service> <local>:<remote> -n <namespace>
+```
+
+### Temporary Debug Pod
+
+```bash
+# Start temporary pod
+kubectl run debug --rm -it --image=busybox -n <namespace> -- /bin/sh
+
+# Debug pod with network tools
+kubectl run debug --rm -it --image=nicolaka/netshoot -n <namespace> -- /bin/bash
+```
+
+## Troubleshooting Quick Reference
+
+### Pod Status Issues
+
+| Status | Likely Cause | Debug Steps |
+|--------|-------------|-------------|
+| `CrashLoopBackOff` | App crash or bad config | `kubectl logs <pod> -n <ns> --previous` |
+| `ImagePullBackOff` | Wrong image name/tag or missing credentials | `kubectl describe pod <pod> -n <ns>` check Events |
+| `Pending` | Insufficient resources or no matching node | `kubectl describe pod <pod> -n <ns>` check Conditions |
+| `Evicted` | Node disk/memory pressure | `kubectl describe node <node>` check Conditions |
+| `OOMKilled` | Memory limit exceeded | Increase `resources.limits.memory` |
+| `CreateContainerConfigError` | Missing ConfigMap/Secret | Verify referenced ConfigMaps/Secrets exist |
+
+### Node Issues
+
+```bash
+# Check node status
+kubectl get nodes
+kubectl describe node <node-name>
+
+# Check node resource pressure
+kubectl top nodes
+
+# Check node conditions (DiskPressure, MemoryPressure, etc.)
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .status.conditions[*]}{.type}={.status} {end}{"\n"}{end}'
+
+# Cordon (stop scheduling) & Drain
+kubectl cordon <node-name>
+kubectl drain <node-name> --ignore-daemonsets --delete-emptydir-data
+kubectl uncordon <node-name>
+```
+
+### Service Connectivity
+
+```bash
+# Check if endpoints exist
+kubectl get endpoints <service> -n <namespace>
+
+# DNS resolution test
+kubectl run dns-test --rm -it --image=busybox -n <namespace> -- nslookup <service>.<namespace>.svc.cluster.local
+
+# Connectivity test
+kubectl run curl-test --rm -it --image=curlimages/curl -n <namespace> -- curl -v http://<service>:<port>
+```
+
+### Resource Quota / Limit Issues
+
+```bash
+# Check namespace resource quotas
+kubectl get resourcequota -n <namespace>
+
+# Check namespace limit ranges
+kubectl get limitrange -n <namespace>
+
+# Check resource usage
+kubectl top pods -n <namespace>
+kubectl top nodes
+```
+````
